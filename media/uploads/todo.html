@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>To do list</title>
+</head>
+<body>
+    <form class="todo-container">
+        <h2>My To-Do List</h2>
+        <input type="text" name="task" id="task" placeholder="Add a new Task"/>
+        <button type="submit" style="color: green;">Add Task</button>
+    </form>
+
+    <ul id="todoTask">Task List</ul>
+    <p id="error" style="color: red;"></p>
+
+    <script>
+        const contElem = document.querySelector('.todo-container')
+        const errorEle = document.querySelector('#error')
+        const todoList = document.querySelector('#todoTask');
+
+        contElem.addEventListener("submit",function(e) {
+            e.preventDefault();
+
+            console.log("Adding new task")
+            const taskEle = document.querySelector('#task').value.trim();
+            
+            if (taskEle === ""){
+                errorEle.textContent = "not task is defined!!!"
+                return
+            } 
+
+            errorEle.textContent="";
+            
+            
+            const li = document.createElement('li');
+            li.textContent = taskEle;
+
+            todoList.appendChild(li);
+            document.querySelector('#task').value = "";
+            alert("task has added sucessfully!")
+
+            document.getElementById
+        
+        })
+    </script>
+</body>
+</html>

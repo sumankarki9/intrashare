@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+    <!-- Welcome message -->
+    <h1 class="text-2xl font-bold mb-4">Welcome, {{ user.username }}!</h1>
+
+    <!-- Search Form -->
+    <form method="GET" class="mb-4 flex space-x-2">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search files or users..." 
+               class="border p-2 rounded flex-1">
+        <button type="submit" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+            Search
+        </button>
+    </form>
+
+    <!-- Upload Form -->
+    <div class="mb-6">
+        <form method="POST" enctype="multipart/form-data" class="flex items-center space-x-2">
+            {% csrf_token %}
+            <input type="file" name="file" class="border p-2 rounded flex-1">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Upload & Share
+            </button>
+        </form>
+    </div>
+
+    <!-- Shared Files -->
+    <h2 class="text-xl font-semibold mb-4">Shared Files</h2>
+    {% if files %}
+        <ul class="space-y-3">
+            {% for file in files %}
+                <li class="flex justify-between items-center border-b py-2 
+                           {% if file.uploader == user %}bg-green-50{% endif %} px-2 rounded">
+                    <div>
+                        <span class="font-medium">{{ file.file.name|slice:"8:" }}</span> 
+                        <span class="text-gray-500 text-sm">by {{ file.uploader.username }}</span>
+                        {% if file.uploader == user %}
+                            <span class="text-green-600 text-sm ml-2">(You)</span>
+                        {% endif %}
+                    </div>
+                    <a href="{% url 'download_file' file.id %}" class="text-blue-600 hover:underline">
+                        Download
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-gray-500">No files found.</p>
+    {% endif %}
+</div>
+{% endblock %}
