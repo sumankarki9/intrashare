@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from .models import UserFile
+from django.core.exceptions import ValidationError
+from .models import AppSettings
 
 class RegisterForm(UserCreationForm):
     email = forms.EmailField(
@@ -81,8 +83,15 @@ class FileUploadForm(forms.ModelForm):
     class Meta:
         model = UserFile
         fields = ['file']
-        widgets = {
-            'file': forms.ClearableFileInput(attrs={
-                'class': 'w-full border px-3 py-2 rounded',
-            })
-        }
+
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        settings = AppSettings.objects.first()
+        max_size = settings.max_file_size if settings else 10485760  # 10 MB default
+
+        if file.size > max_size:
+            raise forms.ValidationError(
+                f"File is too large. Maximum allowed size is {max_size / (1024*1024):.2f} MB."
+            )
+
+        return file

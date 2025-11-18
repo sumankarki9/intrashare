@@ -18,13 +18,14 @@ from django.urls import path,include
 from django.conf import settings
 # from user.views import home
 from django.conf.urls.static import static
+from user.views import custom_admin_dashboard  
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('wadmin/', custom_admin_dashboard, name='custom_admin_dashboard'),
 
     # user app handles login/register/home
     path('auth/', include('user.urls')),
-    path('admin/', admin.site.urls),
     # path('', home, name='home'),
     path('', include('user.urls')),   # <-- this creates homepage route '/'
 ]

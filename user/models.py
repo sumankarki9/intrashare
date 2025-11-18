@@ -23,3 +23,20 @@ class UserFile(models.Model):
 
     def __str__(self):
         return f"{self.file.name} by {self.uploader.username}"
+
+
+class AppSettings(models.Model):
+    max_file_size = models.PositiveIntegerField(
+        default=1048576,  # 1 MB default
+        help_text="Maximum allowed file size in bytes"
+    )
+    allowed_file_types = models.CharField(
+        max_length=255,
+        default="*",
+        help_text="Comma-separated list of allowed file extensions. Use '*' for all."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"App Settings (Max Size: {self.max_file_size} bytes)"

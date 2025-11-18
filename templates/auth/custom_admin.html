@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Custom Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-bold mb-6">Admin Dashboard</h1>
+
+    <!-- File Upload Settings -->
+    <div class="mb-8">
+        <h2 class="text-xl font-semibold mb-2">File Upload Settings</h2>
+        <form method="POST" class="flex items-center space-x-2">
+            {% csrf_token %}
+            <label class="font-medium">Max File Size (MB):</label>
+            <input type="number" name="max_file_size" 
+                   value="{{ max_file_size_mb }}" 
+                   class="border p-2 rounded w-24">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Save
+            </button>
+        </form>
+        <p class="text-gray-500 text-sm mt-1">
+            Current max file size: {{ max_file_size_mb }} MB
+        </p>
+    </div>
+
+    <!-- User Management -->
+    <div>
+        <h2 class="text-xl font-semibold mb-2">Users</h2>
+        <table class="w-full border-collapse border border-gray-300">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border px-4 py-2">Username</th>
+                    <th class="border px-4 py-2">Email</th>
+                    <th class="border px-4 py-2">Active</th>
+                    <th class="border px-4 py-2">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td class="border px-4 py-2">{{ user.username }}</td>
+                    <td class="border px-4 py-2">{{ user.email }}</td>
+                    <td class="border px-4 py-2">{{ user.is_active|yesno:"Yes,No" }}</td>
+                    <td class="border px-4 py-2">
+                        <form method="POST" class="inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                            <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+                                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

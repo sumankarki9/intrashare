@@ -1,9 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404
 from .forms import RegisterForm, FileUploadForm
-from .models import UserFile
+from .models import UserFile,AppSettings
+from django.contrib.auth.models import User
+from django.contrib import messages
+from django.contrib.auth.decorators import user_passes_test
 import os
 from django.db.models import Q
 
@@ -12,23 +15,24 @@ def home(request):
         return redirect('dashboard') 
     return render(request, "home.html")
 
-
 def register_view(request):
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('dashboard')  # Redirect logged-in users
 
     if request.method == "POST":
         form = RegisterForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('dashboard')
+            user = form.save(commit=False)
+            user.is_active = False  # Disable login until admin approval
+            user.save()
+            # Optional: send email to admin notifying new user
+            return render(request, "auth/register_success.html", {"user": user})
         else:
-            # Sequential error handling: show only the first error
+            # Sequential error handling
             for field in form.fields:
                 if form[field].errors:
+                    form.data = form.data.copy()
                     if field == 'username':
-                        form.data = form.data.copy()
                         form.data['username'] = ''
                     for f in form.fields:
                         if f != field:
@@ -38,30 +42,6 @@ def register_view(request):
         form = RegisterForm()
 
     return render(request, "auth/register.html", {"form": form})
-
-
-@login_required
-def dashboard(request):
-    query = request.GET.get('q', '')
-    if query:
-        files = UserFile.objects.filter(
-            Q(file__icontains=query) | Q(uploader__username__icontains=query)
-        ).order_by('-uploaded_at')
-    else:
-        files = UserFile.objects.all().order_by('-uploaded_at')
-
-    if request.method == "POST":
-        form = FileUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            f = form.save(commit=False)
-            f.uploader = request.user  # Make sure your UserFile model has 'uploader' field
-            f.save()
-            return redirect('dashboard')
-    else:
-        form = FileUploadForm()
-
-    return render(request, "dashboard.html", {"files": files, "form": form, "query": query})
-
 
 @login_required
 def download_file(request, file_id):
@@ -74,7 +54,143 @@ def download_file(request, file_id):
             return response
     raise Http404
 
+def custom_login_view(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+
+        # --- Step 1: Check if user exists ---
+        try:
+            db_user = User.objects.get(username=username)
+            if not db_user.is_active:
+                messages.error(request, "Your account is under admin review. Please wait for approval.")
+                return render(request, "auth/login.html")
+        except User.DoesNotExist:
+            db_user = None
+
+        # --- Step 2: Authenticate normally ---
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+            return redirect("dashboard")
+        else:
+            messages.error(request, "Invalid username or password.")
+            return render(request, "auth/login.html")
+
+    return render(request, "auth/login.html")
+
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def toggle_user_status(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+
+    # Prevent admin from deactivating himself
+    if user == request.user:
+        messages.error(request, "You cannot deactivate your own account.")
+        return redirect("dashboard")
+
+    user.is_active = not user.is_active
+    user.save()
+
+    if user.is_active:
+        messages.success(request, f"{user.username} has been activated.")
+    else:
+        messages.warning(request, f"{user.username} has been deactivated.")
+
+    return redirect("dashboard")
+
+
+
+# Only superusers can access
+@user_passes_test(lambda u: u.is_superuser)
+def custom_admin_dashboard(request):
+    settings = AppSettings.objects.first()
+    users = User.objects.all().order_by('username')
+
+    # Convert max_file_size to MB
+    max_file_size_mb = settings.max_file_size // 1048576 if settings else 1
+
+    if request.method == "POST":
+        # Toggle user active or set max file size
+        user_id = request.POST.get("user_id")
+        max_size = request.POST.get("max_file_size")
+
+        if user_id:
+            user = User.objects.get(id=user_id)
+            user.is_active = not user.is_active
+            user.save()
+
+        if max_size:
+            if settings:
+                settings.max_file_size = int(max_size) * 1024 * 1024  # Convert MB → bytes
+                settings.save()
+                max_file_size_mb = settings.max_file_size // 1048576
+
+    return render(request, "auth/custom_admin.html", {
+        "users": users,
+        "settings": settings,
+        "max_file_size_mb": max_file_size_mb  # Pass MB value to template
+    })
 
 def logout_view(request):
     logout(request)
     return redirect('home')
+
+
+
+@login_required
+def dashboard(request):
+    settings = AppSettings.objects.first()
+    max_file_size_mb = settings.max_file_size / (1024 * 1024) if settings else 1  # default 1 MB
+
+    query = request.GET.get('q', '')
+
+    if query:
+        files = UserFile.objects.filter(
+            Q(file__icontains=query) | Q(uploader__username__icontains=query)
+        ).order_by('-uploaded_at')
+    else:
+        files = UserFile.objects.all().order_by('-uploaded_at')
+
+    # Handle file upload / update
+    if request.method == "POST":
+        if 'file' in request.FILES:
+            # New file upload
+            form = FileUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                f = form.save(commit=False)
+                f.uploader = request.user
+                f.save()
+                messages.success(request, "File uploaded successfully.")
+                return redirect('dashboard')
+
+        elif 'update_file' in request.FILES and 'file_id' in request.POST:
+            # Update existing file
+            try:
+                file_id = int(request.POST['file_id'])
+                user_file = UserFile.objects.get(id=file_id, uploader=request.user)
+                user_file.file.delete(save=False)  # delete old file
+                user_file.file = request.FILES['update_file']
+                user_file.save()
+                messages.success(request, f"File {user_file.file.name} updated successfully.")
+                return redirect('dashboard')
+            except UserFile.DoesNotExist:
+                messages.error(request, "File not found or permission denied.")
+            except Exception as e:
+                messages.error(request, f"Error updating file: {str(e)}")
+
+    else:
+        form = FileUploadForm()
+
+    users = User.objects.all().order_by('username') if request.user.is_superuser else None
+
+    return render(request, "dashboard.html", {
+        "files": files,
+        "form": form,
+        "query": query,
+        "settings": settings,
+        "max_file_size_mb": max_file_size_mb,  # Pass to template
+        "users": users,
+    })
