@@ -95,13 +95,82 @@
                     </svg>
                     <h2 class="text-lg font-semibold text-gray-900">Upload New File</h2>
                 </div>
-                <form method="POST" enctype="multipart/form-data" class="space-y-3">
+                <form method="POST" enctype="multipart/form-data" class="space-y-4">
                     {% csrf_token %}
-                    <input type="file" 
-                           name="file" 
-                           required 
-                           class="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:font-semibold transition" 
-                           onchange="checkFileSize(this, 'upload')">
+                    
+                    <!-- File Input -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Choose File</label>
+                        <input type="file" 
+                               name="file" 
+                               required 
+                               class="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:font-semibold transition" 
+                               onchange="checkFileSize(this, 'upload')">
+                    </div>
+                    
+                    <!-- Expiry Time Inputs -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Set Expiry Time</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Days</label>
+                                <input type="number" 
+                                       name="expiry_days" 
+                                       min="0" 
+                                       value="0"
+                                       placeholder="0"
+                                       id="expiry_days"
+                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Hours</label>
+                                <input type="number" 
+                                       name="expiry_hours" 
+                                       min="0" 
+                                       max="23"
+                                       value="0"
+                                       placeholder="0"
+                                       id="expiry_hours"
+                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Minutes</label>
+                                <input type="number" 
+                                       name="expiry_minutes" 
+                                       min="0" 
+                                       max="59"
+                                       value="0"
+                                       placeholder="0"
+                                       id="expiry_minutes"
+                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Seconds</label>
+                                <input type="number" 
+                                       name="expiry_seconds" 
+                                       min="0" 
+                                       max="59"
+                                       value="0"
+                                       placeholder="0"
+                                       id="expiry_seconds"
+                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Never Expire Checkbox -->
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" 
+                               name="never_expire" 
+                               id="never_expire"
+                               checked
+                               onchange="toggleExpiryInputs(this)"
+                               class="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
+                        <label for="never_expire" class="text-sm font-medium text-gray-700">
+                            Never Expire (Leave unchecked to set expiry time)
+                        </label>
+                    </div>
+                    
                     <button type="submit" 
                             class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition font-semibold shadow-md">
                         Upload & Share
@@ -150,7 +219,7 @@
                                         <h3 class="font-semibold text-gray-900 truncate text-lg mb-1">
                                             {{ file.file.name|slice:"8:" }}
                                         </h3>
-                                        <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                        <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600 mb-2">
                                             <span class="flex items-center gap-1">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -175,6 +244,28 @@
                                                 {{ file.uploaded_at|date:"M d, Y" }}
                                             </span>
                                         </div>
+                                        <!-- Expiry Information -->
+                                        <div class="flex items-center gap-2 mt-2">
+                                            {% if file.expires_at %}
+                                                <span class="flex items-center gap-1 text-sm {% if file.is_expired %}text-red-600{% else %}text-orange-600{% endif %}">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    {% if file.is_expired %}
+                                                        <span class="font-semibold">Expired</span>
+                                                    {% else %}
+                                                        <span class="font-medium">Expires in: {{ file.time_until_expiry }}</span>
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                <span class="flex items-center gap-1 text-sm text-green-600">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                    </svg>
+                                                    <span class="font-medium">Never expires</span>
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -191,6 +282,13 @@
                                                class="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100 file:font-medium transition" 
                                                onchange="checkFileSize(this, 'update')"
                                                id="update-file-{{ file.id }}">
+                                        <select name="expiry_option" class="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500">
+                                            <option value="1_day" {% if file.expiry_option == '1_day' %}selected{% endif %}>1 Day</option>
+                                            <option value="3_days" {% if file.expiry_option == '3_days' %}selected{% endif %}>3 Days</option>
+                                            <option value="7_days" {% if file.expiry_option == '7_days' %}selected{% endif %}>7 Days</option>
+                                            <option value="30_days" {% if file.expiry_option == '30_days' %}selected{% endif %}>30 Days</option>
+                                            <option value="never" {% if file.expiry_option == 'never' %}selected{% endif %}>Never</option>
+                                        </select>
                                         <input type="hidden" name="file_id" value="{{ file.id }}">
                                         <button type="submit" 
                                                 class="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-5 py-2 rounded-lg hover:from-yellow-600 hover:to-yellow-700 transition text-sm font-semibold shadow-md whitespace-nowrap inline-flex items-center gap-2">

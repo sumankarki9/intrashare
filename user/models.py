@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
+from datetime import timedelta
 
 # -------------------------
 # User Profile (Optional)
@@ -13,18 +15,10 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+
 # -------------------------
-# File Upload / Sharing
+# App Settings
 # -------------------------
-class UserFile(models.Model):
-    uploader = models.ForeignKey(User, on_delete=models.CASCADE)  # consistent with views
-    file = models.FileField(upload_to='uploads/')
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.file.name} by {self.uploader.username}"
-
-
 class AppSettings(models.Model):
     max_file_size = models.PositiveIntegerField(
         default=1048576,  # 1 MB default
@@ -38,5 +32,109 @@ class AppSettings(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name = "App Settings"
+        verbose_name_plural = "App Settings"
+
     def __str__(self):
-        return f"App Settings (Max Size: {self.max_file_size} bytes)"
+        return f"App Settings (Max Size: {self.max_file_size / (1024 * 1024):.2f} MB)"
+
+
+# -------------------------
+# File Upload / Sharing
+# -------------------------
+class UserFile(models.Model):
+    uploader = models.ForeignKey(User, on_delete=models.CASCADE)
+    file = models.FileField(upload_to='uploads/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    # Expiry time fields
+    expiry_days = models.PositiveIntegerField(default=0, help_text="Days until expiry")
+    expiry_hours = models.PositiveIntegerField(default=0, help_text="Hours until expiry")
+    expiry_minutes = models.PositiveIntegerField(default=0, help_text="Minutes until expiry")
+    expiry_seconds = models.PositiveIntegerField(default=0, help_text="Seconds until expiry")
+    never_expire = models.BooleanField(default=True, help_text="File never expires")
+    
+    expires_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="Calculated expiration date/time"
+    )
+
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = "User File"
+        verbose_name_plural = "User Files"
+
+    def __str__(self):
+        return f"{self.file.name} by {self.uploader.username}"
+
+    def save(self, *args, **kwargs):
+        """Calculate expiry date based on time fields"""
+        # Calculate total time delta from all fields
+        total_time = timedelta(
+            days=self.expiry_days or 0,
+            hours=self.expiry_hours or 0,
+            minutes=self.expiry_minutes or 0,
+            seconds=self.expiry_seconds or 0
+        )
+        
+        # Check if user wants never expire OR if no time is set
+        if self.never_expire:
+            self.expires_at = None
+        elif total_time.total_seconds() > 0:
+            # User set a specific time
+            self.expires_at = timezone.now() + total_time
+            self.never_expire = False  # Make sure never_expire is False if time is set
+        else:
+            # No time set and never_expire is False - default to 7 days
+            self.expires_at = timezone.now() + timedelta(days=7)
+            self.never_expire = False
+        
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        """Check if the file has expired"""
+        if self.never_expire:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return True
+        return False
+
+    def time_until_expiry(self):
+        """Return human-readable time until expiry"""
+        if self.never_expire or not self.expires_at:
+            return "Never expires"
+        
+        if self.is_expired():
+            return "Expired"
+        
+        time_left = self.expires_at - timezone.now()
+        days = time_left.days
+        hours = time_left.seconds // 3600
+        minutes = (time_left.seconds % 3600) // 60
+        seconds = time_left.seconds % 60
+        
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h {minutes}m {seconds}s"
+        elif minutes > 0:
+            return f"{minutes}m {seconds}s"
+        else:
+            return f"{seconds}s"
+    
+    def get_expiry_time_string(self):
+        """Get the expiry time as a string for display"""
+        if self.never_expire:
+            return "Never"
+        parts = []
+        if self.expiry_days:
+            parts.append(f"{self.expiry_days}d")
+        if self.expiry_hours:
+            parts.append(f"{self.expiry_hours}h")
+        if self.expiry_minutes:
+            parts.append(f"{self.expiry_minutes}m")
+        if self.expiry_seconds:
+            parts.append(f"{self.expiry_seconds}s")
+        return " ".join(parts) if parts else "7d (default)"

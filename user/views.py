@@ -81,30 +81,51 @@ def delete_file(request, file_id):
     return redirect('dashboard')
 
 def custom_login_view(request):
+    # Redirect if already logged in
+    if request.user.is_authenticated:
+        if request.user.is_superuser:
+            # Check if coming from wadmin
+            next_url = request.GET.get('next', '')
+            if 'wadmin' in next_url:
+                return redirect('custom_admin_dashboard')
+        return redirect('dashboard')
+    
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
+        next_url = request.POST.get("next", "")
 
         try:
             db_user = User.objects.get(username=username)
             if not db_user.is_active:
                 messages.error(request, "Your account is under admin review. Please wait for approval.")
-                return render(request, "auth/login.html")
+                return render(request, "auth/login.html", {"next": next_url})
         except User.DoesNotExist:
             db_user = None
 
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
+            # Check if trying to access wadmin without superuser privileges
+            if 'wadmin' in next_url and not user.is_superuser:
+                messages.error(request, "You don't have permission to access the admin panel.")
+                return render(request, "auth/login.html", {"next": next_url})
+            
             login(request, user)
+            
+            # Redirect to next URL or default dashboard
+            if next_url and next_url != '/':
+                return redirect(next_url)
             return redirect("dashboard")
         else:
             messages.error(request, "Invalid username or password.")
-            return render(request, "auth/login.html")
+            return render(request, "auth/login.html", {"next": next_url})
 
-    return render(request, "auth/login.html")
+    # GET request - check if redirected from wadmin
+    next_url = request.GET.get('next', '')
+    return render(request, "auth/login.html", {"next": next_url})
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(lambda u: u.is_superuser, login_url='/login/?next=/wadmin/')
 def toggle_user_status(request, user_id):
     user = get_object_or_404(User, id=user_id)
 
@@ -122,7 +143,7 @@ def toggle_user_status(request, user_id):
 
     return redirect("custom_admin_dashboard")
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(lambda u: u.is_superuser, login_url='/login/?next=/wadmin/')
 def custom_admin_dashboard(request):
     settings, created = AppSettings.objects.get_or_create(
         defaults={'max_file_size': 1048576}  # 1 MB default
@@ -174,6 +195,21 @@ def dashboard(request):
     else:
         files = UserFile.objects.all().order_by('-uploaded_at')
 
+    # Filter out expired files
+    # Option 1: Just hide expired files (keeps files in storage)
+    # Option 2: Auto-delete expired files (uncomment the 2 lines below)
+    active_files = []
+    for file in files:
+        if file.is_expired():
+            # UNCOMMENT these 2 lines to enable auto-delete:
+            # file.file.delete(save=False)  # Delete from storage
+            # file.delete()                  # Delete from database
+            pass  # Skip expired files (just hide them)
+        else:
+            active_files.append(file)
+    
+    files = active_files
+
     if request.method == "POST":
         if 'file' in request.FILES:
             # New file upload
@@ -188,8 +224,24 @@ def dashboard(request):
             if form.is_valid():
                 f = form.save(commit=False)
                 f.uploader = request.user
+                
+                # Check if never_expire checkbox is checked
+                never_expire = request.POST.get('never_expire') == 'on'
+                
+                if never_expire:
+                    f.never_expire = True
+                    f.expires_at = None
+                else:
+                    # User wants to set expiry time
+                    f.never_expire = False
+                    # The save method will calculate expires_at
+                
                 f.save()
-                messages.success(request, "File uploaded successfully.")
+                
+                if f.never_expire:
+                    messages.success(request, "File uploaded successfully! Expiry: Never")
+                else:
+                    messages.success(request, f"File uploaded successfully! Expiry: {f.get_expiry_time_string()}")
                 return redirect('dashboard')
             else:
                 messages.error(request, "Error uploading file. Please try again.")
@@ -212,10 +264,21 @@ def dashboard(request):
                     messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
                     return redirect('dashboard')
                 
+                # Get expiry fields if provided
+                never_expire = request.POST.get('never_expire') == 'on'
+                
                 # Delete old file and save new one
-                old_file_name = user_file.file.name
                 user_file.file.delete(save=False)
                 user_file.file = new_file
+                user_file.never_expire = never_expire
+                
+                if not never_expire:
+                    user_file.expiry_days = int(request.POST.get('expiry_days', 0))
+                    user_file.expiry_hours = int(request.POST.get('expiry_hours', 0))
+                    user_file.expiry_minutes = int(request.POST.get('expiry_minutes', 0))
+                    user_file.expiry_seconds = int(request.POST.get('expiry_seconds', 0))
+                
+                user_file.expires_at = None  # Reset to recalculate
                 user_file.save()
                 
                 messages.success(request, f"File updated successfully.")
@@ -224,7 +287,7 @@ def dashboard(request):
             except UserFile.DoesNotExist:
                 messages.error(request, "File not found.")
             except ValueError:
-                messages.error(request, "Invalid file ID.")
+                messages.error(request, "Invalid file ID or expiry values.")
             except Exception as e:
                 messages.error(request, f"Error updating file: {str(e)}")
             
