@@ -14,22 +14,22 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path,include
+from django.urls import path, include
 from django.conf import settings
-# from user.views import home
 from django.conf.urls.static import static
 from user.views import custom_admin_dashboard  
 
 urlpatterns = [
+    # Django default admin panel
     path('admin/', admin.site.urls),
+    
+    # Custom admin dashboard
     path('wadmin/', custom_admin_dashboard, name='custom_admin_dashboard'),
-
-    # user app handles login/register/home
-    path('auth/', include('user.urls')),
-    # path('', home, name='home'),
-    path('', include('user.urls')),   # <-- this creates homepage route '/'
+    
+    # All user app routes (home, login, register, dashboard, etc.)
+    path('', include('user.urls')),
 ]
 
-
+# Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

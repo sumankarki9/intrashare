@@ -3,7 +3,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404
 from .forms import RegisterForm, FileUploadForm
-from .models import UserFile,AppSettings
+from .models import UserFile, AppSettings
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
@@ -17,18 +17,16 @@ def home(request):
 
 def register_view(request):
     if request.user.is_authenticated:
-        return redirect('dashboard')  # Redirect logged-in users
+        return redirect('dashboard')
 
     if request.method == "POST":
         form = RegisterForm(request.POST)
         if form.is_valid():
             user = form.save(commit=False)
-            user.is_active = False  # Disable login until admin approval
+            user.is_active = False
             user.save()
-            # Optional: send email to admin notifying new user
             return render(request, "auth/register_success.html", {"user": user})
         else:
-            # Sequential error handling
             for field in form.fields:
                 if form[field].errors:
                     form.data = form.data.copy()
@@ -54,12 +52,39 @@ def download_file(request, file_id):
             return response
     raise Http404
 
+@login_required
+def delete_file(request, file_id):
+    """Delete a file - only owner or admin can delete"""
+    if request.method == "POST":
+        try:
+            user_file = UserFile.objects.get(id=file_id)
+            
+            # Permission check: only uploader or admin can delete
+            if user_file.uploader != request.user and not request.user.is_superuser:
+                messages.error(request, "You don't have permission to delete this file.")
+                return redirect('dashboard')
+            
+            # Store filename for message
+            filename = user_file.file.name
+            
+            # Delete the file from storage and database
+            user_file.file.delete(save=False)
+            user_file.delete()
+            
+            messages.success(request, f"File '{os.path.basename(filename)}' deleted successfully.")
+            
+        except UserFile.DoesNotExist:
+            messages.error(request, "File not found.")
+        except Exception as e:
+            messages.error(request, f"Error deleting file: {str(e)}")
+    
+    return redirect('dashboard')
+
 def custom_login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
 
-        # --- Step 1: Check if user exists ---
         try:
             db_user = User.objects.get(username=username)
             if not db_user.is_active:
@@ -68,7 +93,6 @@ def custom_login_view(request):
         except User.DoesNotExist:
             db_user = None
 
-        # --- Step 2: Authenticate normally ---
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
@@ -80,16 +104,13 @@ def custom_login_view(request):
 
     return render(request, "auth/login.html")
 
-
-
 @user_passes_test(lambda u: u.is_superuser)
 def toggle_user_status(request, user_id):
     user = get_object_or_404(User, id=user_id)
 
-    # Prevent admin from deactivating himself
     if user == request.user:
         messages.error(request, "You cannot deactivate your own account.")
-        return redirect("dashboard")
+        return redirect("custom_admin_dashboard")
 
     user.is_active = not user.is_active
     user.save()
@@ -99,51 +120,50 @@ def toggle_user_status(request, user_id):
     else:
         messages.warning(request, f"{user.username} has been deactivated.")
 
-    return redirect("dashboard")
+    return redirect("custom_admin_dashboard")
 
-
-
-# Only superusers can access
 @user_passes_test(lambda u: u.is_superuser)
 def custom_admin_dashboard(request):
-    settings = AppSettings.objects.first()
+    settings, created = AppSettings.objects.get_or_create(
+        defaults={'max_file_size': 1048576}  # 1 MB default
+    )
     users = User.objects.all().order_by('username')
 
-    # Convert max_file_size to MB
-    max_file_size_mb = settings.max_file_size // 1048576 if settings else 1
+    max_file_size_mb = settings.max_file_size // 1048576
 
     if request.method == "POST":
-        # Toggle user active or set max file size
-        user_id = request.POST.get("user_id")
         max_size = request.POST.get("max_file_size")
 
-        if user_id:
-            user = User.objects.get(id=user_id)
-            user.is_active = not user.is_active
-            user.save()
-
         if max_size:
-            if settings:
-                settings.max_file_size = int(max_size) * 1024 * 1024  # Convert MB → bytes
-                settings.save()
-                max_file_size_mb = settings.max_file_size // 1048576
+            try:
+                max_size_int = int(max_size)
+                if max_size_int > 0:
+                    settings.max_file_size = max_size_int * 1024 * 1024
+                    settings.save()
+                    max_file_size_mb = settings.max_file_size // 1048576
+                    messages.success(request, f"Max file size updated to {max_size_int} MB.")
+                else:
+                    messages.error(request, "File size must be greater than 0.")
+            except ValueError:
+                messages.error(request, "Invalid file size value.")
+        
+        return redirect('custom_admin_dashboard')
 
     return render(request, "auth/custom_admin.html", {
         "users": users,
         "settings": settings,
-        "max_file_size_mb": max_file_size_mb  # Pass MB value to template
+        "max_file_size_mb": max_file_size_mb
     })
 
 def logout_view(request):
     logout(request)
     return redirect('home')
 
-
-
 @login_required
 def dashboard(request):
     settings = AppSettings.objects.first()
-    max_file_size_mb = settings.max_file_size / (1024 * 1024) if settings else 1  # default 1 MB
+    max_file_size_mb = settings.max_file_size / (1024 * 1024) if settings else 1
+    max_file_size_bytes = settings.max_file_size if settings else 1048576
 
     query = request.GET.get('q', '')
 
@@ -154,10 +174,16 @@ def dashboard(request):
     else:
         files = UserFile.objects.all().order_by('-uploaded_at')
 
-    # Handle file upload / update
     if request.method == "POST":
         if 'file' in request.FILES:
             # New file upload
+            uploaded_file = request.FILES['file']
+            
+            # Server-side file size validation
+            if uploaded_file.size > max_file_size_bytes:
+                messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
+                return redirect('dashboard')
+            
             form = FileUploadForm(request.POST, request.FILES)
             if form.is_valid():
                 f = form.save(commit=False)
@@ -165,32 +191,51 @@ def dashboard(request):
                 f.save()
                 messages.success(request, "File uploaded successfully.")
                 return redirect('dashboard')
+            else:
+                messages.error(request, "Error uploading file. Please try again.")
 
         elif 'update_file' in request.FILES and 'file_id' in request.POST:
             # Update existing file
             try:
                 file_id = int(request.POST['file_id'])
-                user_file = UserFile.objects.get(id=file_id, uploader=request.user)
-                user_file.file.delete(save=False)  # delete old file
-                user_file.file = request.FILES['update_file']
+                user_file = UserFile.objects.get(id=file_id)
+                
+                # Permission check: only uploader or admin can update
+                if user_file.uploader != request.user and not request.user.is_superuser:
+                    messages.error(request, "You don't have permission to update this file.")
+                    return redirect('dashboard')
+                
+                new_file = request.FILES['update_file']
+                
+                # Server-side file size validation
+                if new_file.size > max_file_size_bytes:
+                    messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
+                    return redirect('dashboard')
+                
+                # Delete old file and save new one
+                old_file_name = user_file.file.name
+                user_file.file.delete(save=False)
+                user_file.file = new_file
                 user_file.save()
-                messages.success(request, f"File {user_file.file.name} updated successfully.")
+                
+                messages.success(request, f"File updated successfully.")
                 return redirect('dashboard')
+                
             except UserFile.DoesNotExist:
-                messages.error(request, "File not found or permission denied.")
+                messages.error(request, "File not found.")
+            except ValueError:
+                messages.error(request, "Invalid file ID.")
             except Exception as e:
                 messages.error(request, f"Error updating file: {str(e)}")
+            
+            return redirect('dashboard')
 
-    else:
-        form = FileUploadForm()
-
-    users = User.objects.all().order_by('username') if request.user.is_superuser else None
+    form = FileUploadForm()
 
     return render(request, "dashboard.html", {
         "files": files,
         "form": form,
         "query": query,
         "settings": settings,
-        "max_file_size_mb": max_file_size_mb,  # Pass to template
-        "users": users,
+        "max_file_size_mb": max_file_size_mb,
     })

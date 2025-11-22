@@ -1,60 +1,104 @@
 {% extends "base.html" %}
 
-{% block title %}Custom Admin{% endblock %}
+{% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto bg-white p-6 rounded shadow">
     <h1 class="text-2xl font-bold mb-6">Admin Dashboard</h1>
 
+    <!-- Display messages -->
+    {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for message in messages %}
+                <div class="p-3 rounded {% if message.tags == 'error' %}bg-red-100 text-red-700{% elif message.tags == 'warning' %}bg-yellow-100 text-yellow-700{% elif message.tags == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <!-- File Upload Settings -->
-    <div class="mb-8">
-        <h2 class="text-xl font-semibold mb-2">File Upload Settings</h2>
+    <div class="mb-8 border-b pb-6">
+        <h2 class="text-xl font-semibold mb-3">File Upload Settings</h2>
         <form method="POST" class="flex items-center space-x-2">
             {% csrf_token %}
             <label class="font-medium">Max File Size (MB):</label>
             <input type="number" name="max_file_size" 
                    value="{{ max_file_size_mb }}" 
+                   min="1"
                    class="border p-2 rounded w-24">
-            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                Save
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                Save Settings
             </button>
         </form>
-        <p class="text-gray-500 text-sm mt-1">
-            Current max file size: {{ max_file_size_mb }} MB
+        <p class="text-gray-500 text-sm mt-2">
+            Current max file size: <span class="font-semibold">{{ max_file_size_mb }} MB</span>
         </p>
     </div>
 
     <!-- User Management -->
     <div>
-        <h2 class="text-xl font-semibold mb-2">Users</h2>
-        <table class="w-full border-collapse border border-gray-300">
-            <thead>
-                <tr class="bg-gray-100">
-                    <th class="border px-4 py-2">Username</th>
-                    <th class="border px-4 py-2">Email</th>
-                    <th class="border px-4 py-2">Active</th>
-                    <th class="border px-4 py-2">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in users %}
-                <tr>
-                    <td class="border px-4 py-2">{{ user.username }}</td>
-                    <td class="border px-4 py-2">{{ user.email }}</td>
-                    <td class="border px-4 py-2">{{ user.is_active|yesno:"Yes,No" }}</td>
-                    <td class="border px-4 py-2">
-                        <form method="POST" class="inline">
-                            {% csrf_token %}
-                            <input type="hidden" name="user_id" value="{{ user.id }}">
-                            <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
-                                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h2 class="text-xl font-semibold mb-3">User Management</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse border border-gray-300">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="border border-gray-300 px-4 py-2 text-left">Username</th>
+                        <th class="border border-gray-300 px-4 py-2 text-left">Email</th>
+                        <th class="border border-gray-300 px-4 py-2 text-center">Status</th>
+                        <th class="border border-gray-300 px-4 py-2 text-center">Admin</th>
+                        <th class="border border-gray-300 px-4 py-2 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr class="{% if not user.is_active %}bg-gray-50{% endif %}">
+                        <td class="border border-gray-300 px-4 py-2">
+                            {{ user.username }}
+                            {% if user == request.user %}
+                                <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-2">You</span>
+                            {% endif %}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2">{{ user.email }}</td>
+                        <td class="border border-gray-300 px-4 py-2 text-center">
+                            {% if user.is_active %}
+                                <span class="text-green-600 font-semibold">Active</span>
+                            {% else %}
+                                <span class="text-red-600 font-semibold">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-center">
+                            {% if user.is_superuser %}
+                                <span class="text-purple-600 font-semibold">Yes</span>
+                            {% else %}
+                                <span class="text-gray-500">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="border border-gray-300 px-4 py-2 text-center">
+                            {% if user == request.user %}
+                                <span class="text-gray-400 text-sm">Cannot modify self</span>
+                            {% else %}
+                                <a href="{% url 'toggle_user_status' user.id %}" 
+                                   class="{% if user.is_active %}bg-yellow-500 hover:bg-yellow-600{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white px-3 py-1 rounded transition inline-block">
+                                    {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not users %}
+            <p class="text-gray-500 mt-4">No users found.</p>
+        {% endif %}
+    </div>
+
+    <!-- Back to Dashboard Link -->
+    <div class="mt-6 pt-6 border-t">
+        <a href="{% url 'dashboard' %}" class="text-blue-600 hover:underline">
+            ← Back to Dashboard
+        </a>
     </div>
 </div>
 {% endblock %}

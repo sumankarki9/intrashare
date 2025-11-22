@@ -3,39 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Network File Sharing{% endblock %}</title>
-
-    <!-- Tailwind CDN (for development) -->
+    <title>{% block title %}IntraShare{% endblock %}</title>
+    
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
 
+        /* Prevent layout shift */
+        body {
+            overflow-y: scroll;
+        }
+
+        /* Smooth transitions */
+        * {
+            transition-property: background-color, border-color, color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-
-    <!-- Navbar -->
-    <nav class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <a href="{% url 'home' %}" class="text-xl font-semibold">FileShare</a>
-
-            <div>
-                {% if user.is_authenticated %}
-                    <span class="mr-4">Hello, {{ user.username }}</span>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation Bar -->
+    {% if request.user.is_authenticated %}
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="{% url 'home' %}" class="text-xl font-bold text-gray-900">
+                        IntraShare
+                    </a>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'dashboard' %}" 
+                       class="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                        Dashboard
+                    </a>
+                    
+                    {% if request.user.is_superuser %}
+                    <a href="{% url 'custom_admin_dashboard' %}" 
+                       class="text-purple-600 hover:text-purple-800 px-3 py-2 rounded-md text-sm font-medium">
+                        Admin
+                    </a>
+                    {% endif %}
+                    
+                    <span class="text-gray-600 text-sm">
+                        Hello, <span class="font-semibold">{{ request.user.username }}</span>
+                    </span>
+                    
                     <a href="{% url 'logout' %}" 
-                       class="text-red-500 hover:underline">Logout</a>
-                {% else %}
-                    <a href="{% url 'login' %}" 
-                       class="mr-4 hover:underline">Login</a>
-                    <a href="{% url 'register' %}" 
-                       class="hover:underline">Register</a>
-                {% endif %}
+                       class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm font-medium">
+                        Logout
+                    </a>
+                </div>
             </div>
         </div>
     </nav>
+    {% endif %}
 
-    <!-- Main content -->
-    <div class="max-w-3xl mx-auto mt-8">
-        {% block content %}
-        {% endblock %}
-    </div>
+    <!-- Main Content -->
+    <main class="{% if request.user.is_authenticated %}py-8{% endif %}">
+        {% block content %}{% endblock %}
+    </main>
 
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-gray-500 text-sm">
+                &copy; 2025 IntraShare. All rights reserved.
+            </p>
+        </div>
+    </footer>
 </body>
 </html>
