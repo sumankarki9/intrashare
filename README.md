@@ -185,7 +185,7 @@ cp -r media backups/media_$(date +%Y%m%d)
 
 ```
 ┌─────────────────────────────────────┐
-│         Your Local Network          │
+│           Local Network             │
 │         (192.168.1.0/24)            │
 ├─────────────────────────────────────┤
 │                                     │
@@ -318,21 +318,7 @@ sudo ufw allow 8000
 # Check ALLOWED_HOSTS in settings.py
 ```
 
-### Issue 2: Connection refused
-
-**Solution:**
-```bash
-# Check if server is running
-ps aux | grep python
-
-# Check which port it's using
-netstat -tlnp | grep 8000
-
-# Restart server
-python manage.py runserver 0.0.0.0:8000
-```
-
-### Issue 3: CSRF verification failed
+### Issue 2: CSRF verification failed
 
 **Solution:**
 Add your server IP to CSRF_TRUSTED_ORIGINS in settings.py:
