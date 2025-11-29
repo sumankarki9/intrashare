@@ -69,8 +69,12 @@ class UserFile(models.Model):
     def __str__(self):
         return f"{self.file.name} by {self.uploader.username}"
 
-    def save(self, *args, **kwargs):
-        """Calculate expiry date based on time fields"""
+    def calculate_expiry(self):
+        """Calculate and set the expiry date based on time fields"""
+        if self.never_expire:
+            self.expires_at = None
+            return
+        
         # Calculate total time delta from all fields
         total_time = timedelta(
             days=self.expiry_days or 0,
@@ -79,27 +83,24 @@ class UserFile(models.Model):
             seconds=self.expiry_seconds or 0
         )
         
-        # Check if user wants never expire OR if no time is set
-        if self.never_expire:
-            self.expires_at = None
-        elif total_time.total_seconds() > 0:
-            # User set a specific time
+        # Check if any time is actually set
+        if total_time.total_seconds() > 0:
+            # Set expiry based on current time + delta
             self.expires_at = timezone.now() + total_time
-            self.never_expire = False  # Make sure never_expire is False if time is set
         else:
-            # No time set and never_expire is False - default to 7 days
+            # No time set - default to 7 days
             self.expires_at = timezone.now() + timedelta(days=7)
-            self.never_expire = False
-        
+
+    def save(self, *args, **kwargs):
+        """Calculate expiry before saving"""
+        self.calculate_expiry()
         super().save(*args, **kwargs)
 
     def is_expired(self):
         """Check if the file has expired"""
-        if self.never_expire:
+        if self.never_expire or not self.expires_at:
             return False
-        if self.expires_at and timezone.now() > self.expires_at:
-            return True
-        return False
+        return timezone.now() > self.expires_at
 
     def time_until_expiry(self):
         """Return human-readable time until expiry"""
@@ -110,11 +111,17 @@ class UserFile(models.Model):
             return "Expired"
         
         time_left = self.expires_at - timezone.now()
+        
+        # Handle negative time (expired)
+        if time_left.total_seconds() < 0:
+            return "Expired"
+        
         days = time_left.days
         hours = time_left.seconds // 3600
         minutes = (time_left.seconds % 3600) // 60
         seconds = time_left.seconds % 60
         
+        # Format display based on largest unit
         if days > 0:
             return f"{days}d {hours}h {minutes}m"
         elif hours > 0:
@@ -137,4 +144,4 @@ class UserFile(models.Model):
             parts.append(f"{self.expiry_minutes}m")
         if self.expiry_seconds:
             parts.append(f"{self.expiry_seconds}s")
-        return " ".join(parts) if parts else "7d (default)"
+        return " ".join(parts) if parts else "Not set"
