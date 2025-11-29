@@ -220,34 +220,40 @@ def dashboard(request):
                 messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
                 return redirect('dashboard')
             
-            form = FileUploadForm(request.POST, request.FILES)
-            if form.is_valid():
-                f = form.save(commit=False)
-                f.uploader = request.user
-                
-                # Check if never_expire checkbox is checked
-                never_expire = request.POST.get('never_expire') == 'on'
-                
-                if never_expire:
-                    f.never_expire = True
-                    f.expires_at = None
-                else:
-                    # User wants to set expiry time
-                    f.never_expire = False
-                    # The save method will calculate expires_at
-                
-                f.save()
-                
-                if f.never_expire:
-                    messages.success(request, "File uploaded successfully! Expiry: Never")
-                else:
-                    messages.success(request, f"File uploaded successfully! Expiry: {f.get_expiry_time_string()}")
-                return redirect('dashboard')
+            # Get form data
+            never_expire = request.POST.get('never_expire') == 'on'
+            
+            # Create file instance manually
+            user_file = UserFile()
+            user_file.file = uploaded_file
+            user_file.uploader = request.user
+            user_file.never_expire = never_expire
+            
+            if not never_expire:
+                # Get time values
+                user_file.expiry_days = int(request.POST.get('expiry_days', 0) or 0)
+                user_file.expiry_hours = int(request.POST.get('expiry_hours', 0) or 0)
+                user_file.expiry_minutes = int(request.POST.get('expiry_minutes', 0) or 0)
+                user_file.expiry_seconds = int(request.POST.get('expiry_seconds', 0) or 0)
             else:
-                messages.error(request, "Error uploading file. Please try again.")
+                # Reset all time fields to 0 when never expire
+                user_file.expiry_days = 0
+                user_file.expiry_hours = 0
+                user_file.expiry_minutes = 0
+                user_file.expiry_seconds = 0
+            
+            # Save (this will trigger calculate_expiry in model)
+            user_file.save()
+            
+            if user_file.never_expire:
+                messages.success(request, "File uploaded successfully! Expiry: Never")
+            else:
+                messages.success(request, f"File uploaded successfully! Expiry: {user_file.get_expiry_time_string()}")
+            
+            return redirect('dashboard')
 
-        elif 'update_file' in request.FILES and 'file_id' in request.POST:
-            # Update existing file
+        elif 'update_file' in request.FILES or 'file_id' in request.POST:
+            # Update existing file (file is now optional)
             try:
                 file_id = int(request.POST['file_id'])
                 user_file = UserFile.objects.get(id=file_id)
@@ -257,39 +263,50 @@ def dashboard(request):
                     messages.error(request, "You don't have permission to update this file.")
                     return redirect('dashboard')
                 
-                new_file = request.FILES['update_file']
+                # Check if new file is uploaded
+                if 'update_file' in request.FILES:
+                    new_file = request.FILES['update_file']
+                    
+                    # Server-side file size validation
+                    if new_file.size > max_file_size_bytes:
+                        messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
+                        return redirect('dashboard')
+                    
+                    # Delete old file and upload new one
+                    user_file.file.delete(save=False)
+                    user_file.file = new_file
                 
-                # Server-side file size validation
-                if new_file.size > max_file_size_bytes:
-                    messages.error(request, f"File too large! Maximum allowed size is {max_file_size_mb:.2f} MB.")
-                    return redirect('dashboard')
-                
-                # Get expiry fields if provided
+                # Update expiry settings (always update, even if no new file)
                 never_expire = request.POST.get('never_expire') == 'on'
-                
-                # Delete old file and save new one
-                user_file.file.delete(save=False)
-                user_file.file = new_file
                 user_file.never_expire = never_expire
                 
                 if not never_expire:
-                    user_file.expiry_days = int(request.POST.get('expiry_days', 0))
-                    user_file.expiry_hours = int(request.POST.get('expiry_hours', 0))
-                    user_file.expiry_minutes = int(request.POST.get('expiry_minutes', 0))
-                    user_file.expiry_seconds = int(request.POST.get('expiry_seconds', 0))
+                    user_file.expiry_days = int(request.POST.get('expiry_days', 0) or 0)
+                    user_file.expiry_hours = int(request.POST.get('expiry_hours', 0) or 0)
+                    user_file.expiry_minutes = int(request.POST.get('expiry_minutes', 0) or 0)
+                    user_file.expiry_seconds = int(request.POST.get('expiry_seconds', 0) or 0)
+                else:
+                    user_file.expiry_days = 0
+                    user_file.expiry_hours = 0
+                    user_file.expiry_minutes = 0
+                    user_file.expiry_seconds = 0
                 
-                user_file.expires_at = None  # Reset to recalculate
+                # Save will recalculate expiry
                 user_file.save()
                 
-                messages.success(request, f"File updated successfully.")
+                if 'update_file' in request.FILES:
+                    messages.success(request, f"File and expiry updated successfully.")
+                else:
+                    messages.success(request, f"Expiry time updated successfully.")
+                
                 return redirect('dashboard')
                 
             except UserFile.DoesNotExist:
                 messages.error(request, "File not found.")
-            except ValueError:
-                messages.error(request, "Invalid file ID or expiry values.")
+            except ValueError as e:
+                messages.error(request, f"Invalid input: {str(e)}")
             except Exception as e:
-                messages.error(request, f"Error updating file: {str(e)}")
+                messages.error(request, f"Error updating: {str(e)}")
             
             return redirect('dashboard')
 
