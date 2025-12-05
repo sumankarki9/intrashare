@@ -7,7 +7,10 @@ from .views import (
     download_file,
     delete_file,
     custom_login_view,
-    toggle_user_status
+    toggle_user_status,
+    forgot_password,
+    verify_otp,
+    reset_password
 )
 
 urlpatterns = [
@@ -20,4 +23,8 @@ urlpatterns = [
     path('delete/<int:file_id>/', delete_file, name='delete_file'),
     path('toggle-user/<int:user_id>/', toggle_user_status, name='toggle_user_status'),
     path('delete/<int:file_id>/', delete_file, name='delete_file'),
+       # Password Reset URLs
+    path('forgot-password/', forgot_password, name='forgot_password'),
+    path('verify-otp/', verify_otp, name='verify_otp'),
+    path('reset-password/', reset_password, name='reset_password'),
 ]

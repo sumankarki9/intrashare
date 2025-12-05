@@ -144,3 +144,75 @@ def send_account_deactivated_email(user):
     except Exception as e:
         print(f"Error sending deactivation email: {str(e)}")
         return False
+
+
+def send_password_reset_otp(user, otp):
+    """Send OTP email for password reset"""
+    subject = 'Password Reset OTP - IntraShare'
+    
+    html_message = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                <h2 style="color: #2563eb; text-align: center;">Password Reset Request</h2>
+                <p>Hello <strong>{user.username}</strong>,</p>
+                <p>We received a request to reset your password. Use the OTP below to proceed:</p>
+                
+                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px; color: #666;">Your OTP Code:</p>
+                    <h1 style="margin: 10px 0; font-size: 36px; letter-spacing: 8px; color: #2563eb; font-weight: bold;">
+                        {otp}
+                    </h1>
+                    <p style="margin: 10px 0; font-size: 12px; color: #999;">This code expires in 10 minutes</p>
+                </div>
+                
+                <p style="color: #dc2626; font-weight: bold;">⚠️ Security Notice:</p>
+                <ul style="color: #666; font-size: 14px;">
+                    <li>Never share this OTP with anyone</li>
+                    <li>Our team will never ask for your OTP</li>
+                    <li>If you didn't request this, please ignore this email</li>
+                </ul>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                
+                <p style="font-size: 12px; color: #999; text-align: center;">
+                    This is an automated message from IntraShare. Please do not reply to this email.
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+    
+    plain_message = f"""
+    Password Reset Request
+    
+    Hello {user.username},
+    
+    We received a request to reset your password. Use the OTP below to proceed:
+    
+    Your OTP Code: {otp}
+    
+    This code expires in 10 minutes.
+    
+    Security Notice:
+    - Never share this OTP with anyone
+    - Our team will never ask for your OTP
+    - If you didn't request this, please ignore this email
+    
+    Best regards,
+    IntraShare Team
+    """
+    
+    try:
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        print(f"Error sending OTP email: {str(e)}")
+        return False

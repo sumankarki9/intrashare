@@ -9,12 +9,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 import os
 from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
 from .utils import (
     send_registration_email_to_admin,
     send_registration_confirmation_to_user,
     send_account_approved_email,
-    send_account_deactivated_email
+    send_account_deactivated_email,
+    send_password_reset_otp
 )
+from .models import UserFile, AppSettings, PasswordResetOTP
 
 def home(request):
     if request.user.is_authenticated:
@@ -367,3 +371,159 @@ def dashboard(request):
         "settings": settings,
         "max_file_size_mb": max_file_size_mb,
     })
+
+
+def forgot_password(request):
+    """Step 1: Request password reset - send OTP"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    
+    if request.method == "POST":
+        identifier = request.POST.get("identifier", "").strip()
+        
+        if not identifier:
+            messages.error(request, "Please enter your username or email.")
+            return render(request, "auth/forgot_password.html")
+        
+        # Find user by username or email
+        user = None
+        try:
+            user = User.objects.get(username=identifier)
+        except User.DoesNotExist:
+            try:
+                user = User.objects.get(email=identifier)
+            except User.DoesNotExist:
+                pass
+        
+        if not user:
+            messages.error(request, "No account found with that username or email.")
+            return render(request, "auth/forgot_password.html")
+        
+        if not user.email:
+            messages.error(request, "This account has no email address registered. Please contact the administrator.")
+            return render(request, "auth/forgot_password.html")
+        
+        # Check for recent OTP requests (rate limiting)
+        recent_otp = PasswordResetOTP.objects.filter(
+            user=user,
+            created_at__gte=timezone.now() - timedelta(minutes=2)
+        ).first()
+        
+        if recent_otp:
+            messages.warning(request, "Please wait 2 minutes before requesting another OTP.")
+            return render(request, "auth/forgot_password.html")
+        
+        # Generate and save OTP
+        otp_code = PasswordResetOTP.generate_otp()
+        PasswordResetOTP.objects.create(user=user, otp=otp_code)
+        
+        # Send OTP email
+        if send_password_reset_otp(user, otp_code):
+            messages.success(request, f"An OTP has been sent to {user.email}. Please check your inbox.")
+            # Store username in session for next step
+            request.session['reset_username'] = user.username
+            return redirect('verify_otp')
+        else:
+            messages.error(request, "Failed to send OTP. Please try again later.")
+            return render(request, "auth/forgot_password.html")
+    
+    return render(request, "auth/forgot_password.html")
+
+
+def verify_otp(request):
+    """Step 2: Verify OTP"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    
+    username = request.session.get('reset_username')
+    if not username:
+        messages.error(request, "Session expired. Please start the password reset process again.")
+        return redirect('forgot_password')
+    
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        messages.error(request, "User not found.")
+        return redirect('forgot_password')
+    
+    if request.method == "POST":
+        otp_input = request.POST.get("otp", "").strip()
+        
+        if not otp_input:
+            messages.error(request, "Please enter the OTP.")
+            return render(request, "auth/verify_otp.html", {"email": user.email})
+        
+        # Find valid OTP
+        otp_record = PasswordResetOTP.objects.filter(
+            user=user,
+            otp=otp_input,
+            is_used=False
+        ).order_by('-created_at').first()
+        
+        if not otp_record:
+            messages.error(request, "Invalid OTP. Please try again.")
+            return render(request, "auth/verify_otp.html", {"email": user.email})
+        
+        if not otp_record.is_valid():
+            messages.error(request, "OTP has expired. Please request a new one.")
+            return redirect('forgot_password')
+        
+        # OTP is valid - mark as used and proceed to password reset
+        otp_record.is_used = True
+        otp_record.save()
+        
+        # Store OTP ID in session for verification in next step
+        request.session['verified_otp_id'] = otp_record.id
+        messages.success(request, "OTP verified successfully. Please set your new password.")
+        return redirect('reset_password')
+    
+    return render(request, "auth/verify_otp.html", {"email": user.email})
+
+
+def reset_password(request):
+    """Step 3: Set new password"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    
+    username = request.session.get('reset_username')
+    verified_otp_id = request.session.get('verified_otp_id')
+    
+    if not username or not verified_otp_id:
+        messages.error(request, "Session expired. Please start the password reset process again.")
+        return redirect('forgot_password')
+    
+    try:
+        user = User.objects.get(username=username)
+        otp_record = PasswordResetOTP.objects.get(id=verified_otp_id, user=user, is_used=True)
+    except (User.DoesNotExist, PasswordResetOTP.DoesNotExist):
+        messages.error(request, "Invalid session. Please start again.")
+        return redirect('forgot_password')
+    
+    if request.method == "POST":
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        
+        if not new_password or not confirm_password:
+            messages.error(request, "Please fill in both password fields.")
+            return render(request, "auth/reset_password.html")
+        
+        if new_password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, "auth/reset_password.html")
+        
+        if len(new_password) < 8:
+            messages.error(request, "Password must be at least 8 characters long.")
+            return render(request, "auth/reset_password.html")
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        # Clean up session
+        del request.session['reset_username']
+        del request.session['verified_otp_id']
+        
+        messages.success(request, "Password reset successful! You can now login with your new password.")
+        return redirect('login')
+    
+    return render(request, "auth/reset_password.html")
