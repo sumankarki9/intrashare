@@ -483,3 +483,11 @@ IntraShare is designed for **secure, local network file sharing**:
 ---
 
 **Your data, your network, your control! 🚀**
+
+
+
+send to specific people
+
+signup otp or link
+show only and send them 
+deactivated pop up

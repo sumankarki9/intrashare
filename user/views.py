@@ -9,6 +9,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 import os
 from django.db.models import Q
+from .utils import (
+    send_registration_email_to_admin,
+    send_registration_confirmation_to_user,
+    send_account_approved_email,
+    send_account_deactivated_email
+)
 
 def home(request):
     if request.user.is_authenticated:
@@ -25,6 +31,11 @@ def register_view(request):
             user = form.save(commit=False)
             user.is_active = False
             user.save()
+            
+            # Send emails
+            send_registration_email_to_admin(user)
+            send_registration_confirmation_to_user(user)
+            
             return render(request, "auth/register_success.html", {"user": user})
         else:
             for field in form.fields:
@@ -133,13 +144,22 @@ def toggle_user_status(request, user_id):
         messages.error(request, "You cannot deactivate your own account.")
         return redirect("custom_admin_dashboard")
 
+    # Store previous state
+    was_active = user.is_active
+    
+    # Toggle status
     user.is_active = not user.is_active
     user.save()
 
+    # Send appropriate email
     if user.is_active:
-        messages.success(request, f"{user.username} has been activated.")
+        # Account was activated
+        send_account_approved_email(user)
+        messages.success(request, f"{user.username} has been activated. Approval email sent.")
     else:
-        messages.warning(request, f"{user.username} has been deactivated.")
+        # Account was deactivated
+        send_account_deactivated_email(user)
+        messages.warning(request, f"{user.username} has been deactivated. Notification email sent.")
 
     return redirect("custom_admin_dashboard")
 

@@ -17,14 +17,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from user.views import custom_admin_dashboard  
+from user.views import custom_admin_dashboard, delete_user, toggle_user_status
 
 urlpatterns = [
     # Django default admin panel
     path('admin/', admin.site.urls),
     
-    # Custom admin dashboard
+    # Custom admin dashboard and admin actions
     path('wadmin/', custom_admin_dashboard, name='custom_admin_dashboard'),
+    path('delete-user/<int:user_id>/', delete_user, name='delete_user'),
+    path('toggle-user/<int:user_id>/', toggle_user_status, name='toggle_user_status'),
     
     # All user app routes (home, login, register, dashboard, etc.)
     path('', include('user.urls')),
