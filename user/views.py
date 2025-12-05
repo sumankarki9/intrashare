@@ -144,6 +144,34 @@ def toggle_user_status(request, user_id):
     return redirect("custom_admin_dashboard")
 
 @user_passes_test(lambda u: u.is_superuser, login_url='/login/?next=/wadmin/')
+def delete_user(request, user_id):
+    """Delete a user permanently"""
+    if request.method == "POST":
+        user = get_object_or_404(User, id=user_id)
+        
+        # Prevent admin from deleting themselves
+        if user == request.user:
+            messages.error(request, "You cannot delete your own account.")
+            return redirect("custom_admin_dashboard")
+        
+        # Delete user's files first
+        user_files = UserFile.objects.filter(uploader=user)
+        file_count = user_files.count()
+        
+        # Delete all user's files
+        for file in user_files:
+            file.file.delete(save=False)
+            file.delete()
+        
+        username = user.username
+        user.delete()
+        
+        messages.success(request, f"User '{username}' and {file_count} file(s) deleted permanently.")
+        return redirect("custom_admin_dashboard")
+    
+    return redirect("custom_admin_dashboard")
+
+@user_passes_test(lambda u: u.is_superuser, login_url='/login/?next=/wadmin/')
 def custom_admin_dashboard(request):
     settings, created = AppSettings.objects.get_or_create(
         defaults={'max_file_size': 1048576}  # 1 MB default

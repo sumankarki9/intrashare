@@ -19,4 +19,5 @@ urlpatterns = [
     path('download/<int:file_id>/', download_file, name='download_file'),
     path('delete/<int:file_id>/', delete_file, name='delete_file'),
     path('toggle-user/<int:user_id>/', toggle_user_status, name='toggle_user_status'),
+    path('delete/<int:file_id>/', delete_file, name='delete_file'),
 ]
