@@ -493,5 +493,4 @@ show only and send them
 deactivated pop up
 
 
-Hello@Intra@gmail123
-python manage.py createsuperuser
+
