@@ -178,3 +178,17 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"OTP for {self.user.username} - {'Used' if self.is_used else 'Valid' if self.is_valid() else 'Expired'}"
+
+class FileShare(models.Model):
+    """Model to track files shared with specific users"""
+    file = models.ForeignKey('UserFile', on_delete=models.CASCADE, related_name='shares')
+    shared_with = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shared_files')
+    shared_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='files_shared_by_me')
+    shared_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('file', 'shared_with')  # Prevent duplicate shares
+        ordering = ['-shared_at']
+    
+    def __str__(self):
+        return f"{self.file.file.name} shared with {self.shared_with.username}"

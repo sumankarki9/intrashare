@@ -18,7 +18,7 @@ from .utils import (
     send_account_deactivated_email,
     send_password_reset_otp
 )
-from .models import UserFile, AppSettings, PasswordResetOTP
+from .models import UserFile, AppSettings, PasswordResetOTP, FileShare
 
 def home(request):
     if request.user.is_authenticated:
@@ -240,27 +240,52 @@ def dashboard(request):
 
     query = request.GET.get('q', '')
 
+    # Get files uploaded by current user OR shared with current user
     if query:
-        files = UserFile.objects.filter(
+        # Files uploaded by user
+        my_files = UserFile.objects.filter(
+            uploader=request.user
+        ).filter(
             Q(file__icontains=query) | Q(uploader__username__icontains=query)
-        ).order_by('-uploaded_at')
+        )
+        
+        # Files shared with user
+        shared_file_ids = FileShare.objects.filter(
+            shared_with=request.user
+        ).values_list('file_id', flat=True)
+        
+        shared_files = UserFile.objects.filter(
+            id__in=shared_file_ids
+        ).filter(
+            Q(file__icontains=query) | Q(uploader__username__icontains=query)
+        )
+        
+        files = (my_files | shared_files).distinct().order_by('-uploaded_at')
     else:
-        files = UserFile.objects.all().order_by('-uploaded_at')
+        # Files uploaded by user
+        my_files = UserFile.objects.filter(uploader=request.user)
+        
+        # Files shared with user
+        shared_file_ids = FileShare.objects.filter(
+            shared_with=request.user
+        ).values_list('file_id', flat=True)
+        
+        shared_files = UserFile.objects.filter(id__in=shared_file_ids)
+        
+        files = (my_files | shared_files).distinct().order_by('-uploaded_at')
 
     # Filter out expired files
-    # Option 1: Just hide expired files (keeps files in storage)
-    # Option 2: Auto-delete expired files (uncomment the 2 lines below)
     active_files = []
     for file in files:
         if file.is_expired():
-            # UNCOMMENT these 2 lines to enable auto-delete:
-            # file.file.delete(save=False)  # Delete from storage
-            # file.delete()                  # Delete from database
             pass  # Skip expired files (just hide them)
         else:
             active_files.append(file)
     
     files = active_files
+    
+    # Get all active users for sharing (exclude current user)
+    all_users = User.objects.filter(is_active=True).exclude(id=request.user.id).order_by('username')
 
     if request.method == "POST":
         if 'file' in request.FILES:
@@ -297,10 +322,29 @@ def dashboard(request):
             # Save (this will trigger calculate_expiry in model)
             user_file.save()
             
-            if user_file.never_expire:
-                messages.success(request, "File uploaded successfully! Expiry: Never")
+            # Handle sharing with specific users
+            shared_users = request.POST.getlist('shared_users')
+            if shared_users:
+                for user_id in shared_users:
+                    try:
+                        user = User.objects.get(id=user_id, is_active=True)
+                        FileShare.objects.create(
+                            file=user_file,
+                            shared_with=user,
+                            shared_by=request.user
+                        )
+                    except User.DoesNotExist:
+                        pass
+                
+                if user_file.never_expire:
+                    messages.success(request, f"File uploaded and shared with {len(shared_users)} user(s)! Expiry: Never")
+                else:
+                    messages.success(request, f"File uploaded and shared with {len(shared_users)} user(s)! Expiry: {user_file.get_expiry_time_string()}")
             else:
-                messages.success(request, f"File uploaded successfully! Expiry: {user_file.get_expiry_time_string()}")
+                if user_file.never_expire:
+                    messages.success(request, "File uploaded successfully! Expiry: Never")
+                else:
+                    messages.success(request, f"File uploaded successfully! Expiry: {user_file.get_expiry_time_string()}")
             
             return redirect('dashboard')
 
@@ -346,6 +390,24 @@ def dashboard(request):
                 # Save will recalculate expiry
                 user_file.save()
                 
+                # Update sharing
+                shared_users = request.POST.getlist('shared_users')
+                if shared_users:
+                    # Remove old shares
+                    FileShare.objects.filter(file=user_file).delete()
+                    
+                    # Add new shares
+                    for user_id in shared_users:
+                        try:
+                            user = User.objects.get(id=user_id, is_active=True)
+                            FileShare.objects.create(
+                                file=user_file,
+                                shared_with=user,
+                                shared_by=request.user
+                            )
+                        except User.DoesNotExist:
+                            pass
+                
                 if 'update_file' in request.FILES:
                     messages.success(request, f"File and expiry updated successfully.")
                 else:
@@ -370,6 +432,7 @@ def dashboard(request):
         "query": query,
         "settings": settings,
         "max_file_size_mb": max_file_size_mb,
+        "all_users": all_users,
     })
 
 

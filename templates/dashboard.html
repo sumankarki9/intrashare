@@ -1,471 +1,300 @@
 {% extends "base.html" %}
+
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        <!-- Header Section -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+<div class="max-w-7xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">File Dashboard</h1>
+
+    <!-- Messages -->
+    {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+                <div class="p-4 rounded {% if message.tags == 'error' %}bg-red-100 text-red-700{% elif message.tags == 'warning' %}bg-yellow-100 text-yellow-700{% elif message.tags == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Upload Form -->
+    <div class="bg-white p-6 rounded shadow mb-6">
+        <h2 class="text-xl font-semibold mb-4">Upload New File</h2>
+        <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Team Dashboard</h1>
-                    <p class="text-gray-600 mt-1">Share and manage your files with your team</p>
+                    <label class="block font-medium mb-2">Select File (Max: {{ max_file_size_mb }} MB)</label>
+                    <input type="file" name="file" required 
+                           class="w-full border border-gray-300 p-2 rounded"
+                           accept="*/*">
                 </div>
-                {% if request.user.is_superuser %}
-                    <a href="{% url 'custom_admin_dashboard' %}" 
-                       class="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-purple-800 transition shadow-md text-sm font-semibold inline-flex items-center justify-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                        Admin Panel
-                    </a>
-                {% endif %}
+                
+                <div>
+                    <label class="block font-medium mb-2">Share with Users (Optional)</label>
+                    <select name="shared_users" multiple 
+                            class="w-full border border-gray-300 p-2 rounded h-32"
+                            style="height: auto;">
+                        {% for user in all_users %}
+                            <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple users</p>
+                </div>
             </div>
-        </div>
 
-        <!-- Display messages -->
-        {% if messages %}
-            <div class="mb-6 space-y-3">
-                {% for message in messages %}
-                    <div class="rounded-lg shadow-md p-4 {% if message.tags == 'error' %}bg-red-50 border-l-4 border-red-500{% elif message.tags == 'warning' %}bg-yellow-50 border-l-4 border-yellow-500{% elif message.tags == 'success' %}bg-green-50 border-l-4 border-green-500{% else %}bg-blue-50 border-l-4 border-blue-500{% endif %}">
-                        <div class="flex items-center gap-3">
-                            <div class="flex-shrink-0">
-                                {% if message.tags == 'success' %}
-                                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                {% elif message.tags == 'error' %}
-                                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                {% elif message.tags == 'warning' %}
-                                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                                    </svg>
-                                {% else %}
-                                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
+            <!-- Expiry Settings -->
+            <div class="mb-4">
+                <label class="flex items-center gap-2 mb-2">
+                    <input type="checkbox" name="never_expire" id="never_expire_upload" class="w-4 h-4">
+                    <span class="font-medium">Never Expire</span>
+                </label>
+                
+                <div id="expiry_fields_upload" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-sm">Days</label>
+                        <input type="number" name="expiry_days" min="0" value="0" 
+                               class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Hours</label>
+                        <input type="number" name="expiry_hours" min="0" max="23" value="0"
+                               class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Minutes</label>
+                        <input type="number" name="expiry_minutes" min="0" max="59" value="0"
+                               class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Seconds</label>
+                        <input type="number" name="expiry_seconds" min="0" max="59" value="0"
+                               class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+                Upload File
+            </button>
+        </form>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+        <form method="GET" class="flex gap-2">
+            <input type="text" 
+                   name="q" 
+                   value="{{ query }}" 
+                   placeholder="Search files by name or uploader..." 
+                   class="flex-1 border border-gray-300 p-2 rounded">
+            <button type="submit" class="bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700">
+                Search
+            </button>
+            {% if query %}
+                <a href="{% url 'dashboard' %}" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">
+                    Clear
+                </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Files List -->
+    <div class="bg-white p-6 rounded shadow">
+        <h2 class="text-xl font-semibold mb-4">Your Files</h2>
+        
+        {% if files %}
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="border p-3 text-left">File Name</th>
+                            <th class="border p-3 text-left">Uploader</th>
+                            <th class="border p-3 text-left">Shared With</th>
+                            <th class="border p-3 text-left">Uploaded At</th>
+                            <th class="border p-3 text-left">Expires</th>
+                            <th class="border p-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in files %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="border p-3">
+                                {{ file.file.name|default:"Unknown" }}
+                                {% if file.uploader != request.user %}
+                                    <span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Shared</span>
                                 {% endif %}
-                            </div>
-                            <p class="font-medium {% if message.tags == 'error' %}text-red-800{% elif message.tags == 'warning' %}text-yellow-800{% elif message.tags == 'success' %}text-green-800{% else %}text-blue-800{% endif %}">
-                                {{ message }}
-                            </p>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-
-        <!-- Search and Upload Section -->
-        <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <!-- Search Card -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <div class="flex items-center gap-2 mb-4">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                    <h2 class="text-lg font-semibold text-gray-900">Search Files</h2>
-                </div>
-                <form method="GET" class="flex gap-2">
-                    <input type="text" 
-                           name="q" 
-                           value="{{ query }}" 
-                           placeholder="Search by filename or username..." 
-                           class="flex-1 border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                    <button type="submit" 
-                            class="bg-gradient-to-r from-gray-600 to-gray-700 text-white px-6 py-3 rounded-lg hover:from-gray-700 hover:to-gray-800 transition font-semibold shadow-md whitespace-nowrap">
-                        Search
-                    </button>
-                    {% if query %}
-                        <a href="{% url 'dashboard' %}" 
-                           class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition font-semibold shadow-md whitespace-nowrap inline-flex items-center">
-                            Clear
-                        </a>
-                    {% endif %}
-                </form>
-            </div>
-
-            <!-- Upload Card -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <div class="flex items-center gap-2 mb-4">
-                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                    <h2 class="text-lg font-semibold text-gray-900">Upload New File</h2>
-                </div>
-                <form method="POST" enctype="multipart/form-data" class="space-y-4">
-                    {% csrf_token %}
-                    
-                    <!-- File Input -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Choose File</label>
-                        <input type="file" 
-                               name="file" 
-                               required 
-                               class="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:font-semibold transition" 
-                               onchange="checkFileSize(this, 'upload')">
-                    </div>
-                    
-                    <!-- Expiry Time Inputs -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Set Expiry Time</label>
-                        <div class="grid grid-cols-4 gap-2">
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">Days</label>
-                                <input type="number" 
-                                       name="expiry_days" 
-                                       min="0" 
-                                       value="0"
-                                       placeholder="0"
-                                       id="expiry_days"
-                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">Hours</label>
-                                <input type="number" 
-                                       name="expiry_hours" 
-                                       min="0" 
-                                       max="23"
-                                       value="0"
-                                       placeholder="0"
-                                       id="expiry_hours"
-                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">Minutes</label>
-                                <input type="number" 
-                                       name="expiry_minutes" 
-                                       min="0" 
-                                       max="59"
-                                       value="0"
-                                       placeholder="0"
-                                       id="expiry_minutes"
-                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">Seconds</label>
-                                <input type="number" 
-                                       name="expiry_seconds" 
-                                       min="0" 
-                                       max="59"
-                                       value="0"
-                                       placeholder="0"
-                                       id="expiry_seconds"
-                                       class="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 text-center">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Never Expire Checkbox -->
-                    <div class="flex items-center gap-2 bg-gray-50 p-3 rounded-lg">
-                        <input type="checkbox" 
-                               name="never_expire" 
-                               id="never_expire"
-                               checked
-                               onchange="toggleExpiryInputs(this)"
-                               class="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
-                        <label for="never_expire" class="text-sm font-medium text-gray-700 cursor-pointer">
-                            <span class="font-semibold">Never Expire</span> 
-                            <span class="text-gray-500">(Check this to keep file permanently, or uncheck and set time above)</span>
-                        </label>
-                    </div>
-                    
-                    <button type="submit" 
-                            class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition font-semibold shadow-md">
-                        Upload & Share
-                    </button>
-                    {% if settings %}
-                        <p class="text-gray-500 text-sm text-center">
-                            Maximum file size: <span class="font-semibold text-gray-700">{{ max_file_size_mb|floatformat:2 }} MB</span>
-                        </p>
-                    {% endif %}
-                </form>
-            </div>
-        </div>
-
-        <!-- Files List Section -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex items-center gap-2 mb-6">
-                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-                </svg>
-                <h2 class="text-xl font-semibold text-gray-900">Shared Files</h2>
-                {% if files %}
-                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold ml-2">
-                        {{ files|length }} file{{ files|length|pluralize }}
-                    </span>
-                {% endif %}
-            </div>
-
-            {% if files %}
-                <div class="space-y-4">
-                    {% for file in files %}
-                        <div class="border border-gray-200 rounded-xl p-5 hover:shadow-md transition bg-gradient-to-r from-white to-gray-50">
-                            <!-- File Info -->
-                            <div class="flex items-start justify-between mb-3">
-                                <div class="flex items-start gap-4 flex-1 min-w-0">
-                                    <!-- File Icon -->
-                                    <div class="flex-shrink-0">
-                                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md">
-                                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
+                            </td>
+                            <td class="border p-3">{{ file.uploader.username }}</td>
+                            <td class="border p-3">
+                                {% if file.uploader == request.user %}
+                                    {% with shared_count=file.shares.count %}
+                                        {% if shared_count > 0 %}
+                                            <span class="text-sm text-gray-600">
+                                                {{ shared_count }} user{{ shared_count|pluralize }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-sm text-gray-400">Not shared</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    <span class="text-sm text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="border p-3 text-sm">{{ file.uploaded_at|date:"M d, Y H:i" }}</td>
+                            <td class="border p-3 text-sm">
+                                {% if file.never_expire %}
+                                    <span class="text-green-600 font-medium">Never</span>
+                                {% else %}
+                                    {{ file.get_expiry_time_string }}
+                                {% endif %}
+                            </td>
+                            <td class="border p-3 text-center">
+                                <div class="flex gap-2 justify-center flex-wrap">
+                                    <a href="{% url 'download_file' file.id %}" 
+                                       class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 text-sm">
+                                        Download
+                                    </a>
                                     
-                                    <!-- File Details -->
-                                    <div class="flex-1 min-w-0">
-                                        <h3 class="font-semibold text-gray-900 truncate text-lg mb-1">
-                                            {{ file.file.name|slice:"8:" }}
-                                        </h3>
-                                        <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600 mb-2">
-                                            <span class="flex items-center gap-1">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                                </svg>
-                                                <span class="font-medium">{{ file.uploader.username }}</span>
-                                            </span>
-                                            {% if file.uploader == request.user %}
-                                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">You</span>
-                                            {% endif %}
-                                            <span class="text-gray-400">•</span>
-                                            <span class="flex items-center gap-1">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                                </svg>
-                                                {{ file.file.size|filesizeformat }}
-                                            </span>
-                                            <span class="text-gray-400">•</span>
-                                            <span class="flex items-center gap-1">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                                </svg>
-                                                {{ file.uploaded_at|date:"M d, Y" }}
-                                            </span>
-                                        </div>
-                                        <!-- Expiry Information -->
-                                        <div class="flex items-center gap-2">
-                                            {% if file.expires_at %}
-                                                <span class="flex items-center gap-1 text-sm {% if file.is_expired %}text-red-600{% else %}text-orange-600{% endif %}">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    {% if file.is_expired %}
-                                                        <span class="font-semibold">Expired</span>
-                                                    {% else %}
-                                                        <span class="font-medium">Expires in: {{ file.time_until_expiry }}</span>
-                                                    {% endif %}
-                                                </span>
-                                            {% else %}
-                                                <span class="flex items-center gap-1 text-sm text-green-600">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                    <span class="font-medium">Never expires</span>
-                                                </span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Action Buttons and Update Form -->
-                            <div class="space-y-3">
-                                <!-- Main Action Buttons -->
-                                <div class="flex flex-wrap gap-2">
                                     {% if file.uploader == request.user or request.user.is_superuser %}
-                                        <!-- Delete Button -->
-                                        <form method="POST" 
-                                              action="{% url 'delete_file' file.id %}" 
-                                              onsubmit="return confirm('⚠️ Are you sure you want to delete this file?\n\nFile: {{ file.file.name|slice:"8:" }}\n\nThis action cannot be undone!');"
-                                              class="inline">
+                                        <button onclick="openEditModal({{ file.id }}, '{{ file.file.name }}', {{ file.never_expire|lower }}, {{ file.expiry_days }}, {{ file.expiry_hours }}, {{ file.expiry_minutes }}, {{ file.expiry_seconds }}, [{% for share in file.shares.all %}{{ share.shared_with.id }}{% if not forloop.last %},{% endif %}{% endfor %}])" 
+                                                class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm">
+                                            Edit
+                                        </button>
+                                        
+                                        <form method="POST" action="{% url 'delete_file' file.id %}" style="display: inline;">
                                             {% csrf_token %}
                                             <button type="submit" 
-                                                    class="bg-red-600 text-white px-4 py-1.5 rounded hover:bg-red-700 transition text-sm font-medium">
+                                                    onclick="return confirm('Are you sure you want to delete this file?')"
+                                                    class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm">
                                                 Delete
                                             </button>
                                         </form>
                                     {% endif %}
-                                    
-                                    <!-- Download Button -->
-                                    <a href="{% url 'download_file' file.id %}" 
-                                       class="bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 transition text-sm font-medium inline-block">
-                                        Download
-                                    </a>
                                 </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-gray-500 text-center py-8">No files found.</p>
+        {% endif %}
+    </div>
+</div>
 
-                                {% if file.uploader == request.user or request.user.is_superuser %}
-                                    <!-- Update Form -->
-                                    <form method="POST" enctype="multipart/form-data" class="border-t border-gray-200 pt-3 space-y-2">
-                                        {% csrf_token %}
-                                        <input type="file" 
-                                               name="update_file" 
-                                               class="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-yellow-500" 
-                                               onchange="checkFileSize(this, 'update')"
-                                               id="update-file-{{ file.id }}">
-                                        
-                                        <div class="flex gap-2 items-center text-sm flex-wrap">
-                                            <span class="text-gray-600">Expires:</span>
-                                            <input type="number" name="expiry_days" min="0" value="{{ file.expiry_days }}" placeholder="0" id="update_days_{{ file.id }}" class="w-16 border border-gray-300 px-2 py-1 rounded text-center text-sm">
-                                            <span class="text-gray-500">d</span>
-                                            <input type="number" name="expiry_hours" min="0" max="23" value="{{ file.expiry_hours }}" placeholder="0" id="update_hours_{{ file.id }}" class="w-16 border border-gray-300 px-2 py-1 rounded text-center text-sm">
-                                            <span class="text-gray-500">h</span>
-                                            <input type="number" name="expiry_minutes" min="0" max="59" value="{{ file.expiry_minutes }}" placeholder="0" id="update_minutes_{{ file.id }}" class="w-16 border border-gray-300 px-2 py-1 rounded text-center text-sm">
-                                            <span class="text-gray-500">m</span>
-                                            <label class="flex items-center gap-1 text-sm text-gray-600">
-                                                <input type="checkbox" name="never_expire" id="update_never_{{ file.id }}" {% if file.never_expire %}checked{% endif %} onchange="toggleUpdateExpiryInputs(this, {{ file.id }})" class="rounded">
-                                                Never
-                                            </label>
-                                        </div>
-                                        
-                                        <input type="hidden" name="file_id" value="{{ file.id }}">
-                                        <button type="submit" class="bg-yellow-500 text-white px-4 py-1.5 rounded hover:bg-yellow-600 transition text-sm font-medium">
-                                            Update
-                                        </button>
-                                    </form>
-                                {% endif %}
-                            </div>
-                        </div>
+<!-- Edit Modal -->
+<div id="editModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded shadow-lg max-w-2xl w-full mx-4">
+        <h2 class="text-xl font-bold mb-4">Edit File</h2>
+        <form method="POST" enctype="multipart/form-data" id="editForm">
+            {% csrf_token %}
+            <input type="hidden" name="file_id" id="edit_file_id">
+            
+            <div class="mb-4">
+                <label class="block font-medium mb-2">Current File: <span id="current_filename" class="text-blue-600"></span></label>
+                <label class="block font-medium mb-2">Replace File (Optional)</label>
+                <input type="file" name="update_file" class="w-full border border-gray-300 p-2 rounded">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block font-medium mb-2">Share with Users</label>
+                <select name="shared_users" multiple 
+                        id="edit_shared_users"
+                        class="w-full border border-gray-300 p-2 rounded h-32"
+                        style="height: auto;">
+                    {% for user in all_users %}
+                        <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
                     {% endfor %}
-                </div>
-            {% else %}
-                <!-- Empty State -->
-                <div class="text-center py-16">
-                    <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full mb-6">
-                        <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                        </svg>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple users</p>
+            </div>
+            
+            <div class="mb-4">
+                <label class="flex items-center gap-2 mb-2">
+                    <input type="checkbox" name="never_expire" id="never_expire_edit" class="w-4 h-4">
+                    <span class="font-medium">Never Expire</span>
+                </label>
+                
+                <div id="expiry_fields_edit" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-sm">Days</label>
+                        <input type="number" name="expiry_days" id="edit_days" min="0" class="w-full border border-gray-300 p-2 rounded">
                     </div>
-                    <h3 class="text-xl font-semibold text-gray-900 mb-2">
-                        {% if query %}
-                            No files found
-                        {% else %}
-                            No files uploaded yet
-                        {% endif %}
-                    </h3>
-                    <p class="text-gray-600 mb-6">
-                        {% if query %}
-                            Try searching with different keywords
-                        {% else %}
-                            Upload your first file to get started!
-                        {% endif %}
-                    </p>
-                    {% if query %}
-                        <a href="{% url 'dashboard' %}" 
-                           class="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-semibold shadow-md">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                            Clear Search
-                        </a>
-                    {% endif %}
+                    <div>
+                        <label class="block text-sm">Hours</label>
+                        <input type="number" name="expiry_hours" id="edit_hours" min="0" max="23" class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Minutes</label>
+                        <input type="number" name="expiry_minutes" id="edit_minutes" min="0" max="59" class="w-full border border-gray-300 p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm">Seconds</label>
+                        <input type="number" name="expiry_seconds" id="edit_seconds" min="0" max="59" class="w-full border border-gray-300 p-2 rounded">
+                    </div>
                 </div>
-            {% endif %}
-        </div>
-
+            </div>
+            
+            <div class="flex gap-2">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+                    Update File
+                </button>
+                <button type="button" onclick="closeEditModal()" class="bg-gray-400 text-white px-6 py-2 rounded hover:bg-gray-500">
+                    Cancel
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
-    function checkFileSize(input, type) {
-        const maxSizeMB = {{ max_file_size_mb|floatformat:2 }};
-        const maxSizeBytes = maxSizeMB * 1024 * 1024;
-        
-        if (input.files && input.files[0]) {
-            const fileSize = input.files[0].size;
-            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-            
-            if (fileSize > maxSizeBytes) {
-                alert(`❌ File too large!\n\nYour file: ${fileSizeMB} MB\nMaximum allowed: ${maxSizeMB} MB\n\nPlease choose a smaller file.`);
-                input.value = '';
-                return false;
-            }
-        }
-        return true;
-    }
+// Toggle expiry fields for upload form
+document.getElementById('never_expire_upload').addEventListener('change', function() {
+    const fields = document.getElementById('expiry_fields_upload');
+    fields.style.display = this.checked ? 'none' : 'grid';
+});
+
+// Toggle expiry fields for edit form
+document.getElementById('never_expire_edit').addEventListener('change', function() {
+    const fields = document.getElementById('expiry_fields_edit');
+    fields.style.display = this.checked ? 'none' : 'grid';
+});
+
+function openEditModal(fileId, filename, neverExpire, days, hours, minutes, seconds, sharedUsers) {
+    document.getElementById('edit_file_id').value = fileId;
+    document.getElementById('current_filename').textContent = filename;
+    document.getElementById('never_expire_edit').checked = neverExpire;
+    document.getElementById('edit_days').value = days;
+    document.getElementById('edit_hours').value = hours;
+    document.getElementById('edit_minutes').value = minutes;
+    document.getElementById('edit_seconds').value = seconds;
     
-    function toggleExpiryInputs(checkbox) {
-        const days = document.getElementById('expiry_days');
-        const hours = document.getElementById('expiry_hours');
-        const minutes = document.getElementById('expiry_minutes');
-        const seconds = document.getElementById('expiry_seconds');
-        
-        if (checkbox.checked) {
-            // Disable and reset expiry inputs when "Never Expire" is checked
-            days.disabled = true;
-            hours.disabled = true;
-            minutes.disabled = true;
-            seconds.disabled = true;
-            days.value = 0;
-            hours.value = 0;
-            minutes.value = 0;
-            seconds.value = 0;
-            days.classList.add('bg-gray-100');
-            hours.classList.add('bg-gray-100');
-            minutes.classList.add('bg-gray-100');
-            seconds.classList.add('bg-gray-100');
-        } else {
-            // Enable expiry inputs
-            days.disabled = false;
-            hours.disabled = false;
-            minutes.disabled = false;
-            seconds.disabled = false;
-            days.classList.remove('bg-gray-100');
-            hours.classList.remove('bg-gray-100');
-            minutes.classList.remove('bg-gray-100');
-            seconds.classList.remove('bg-gray-100');
-        }
-    }
-    
-    function toggleUpdateExpiryInputs(checkbox, fileId) {
-        const days = document.getElementById('update_days_' + fileId);
-        const hours = document.getElementById('update_hours_' + fileId);
-        const minutes = document.getElementById('update_minutes_' + fileId);
-        const seconds = document.getElementById('update_seconds_' + fileId);
-        
-        if (checkbox.checked) {
-            // Disable and reset expiry inputs when "Never Expire" is checked
-            days.disabled = true;
-            hours.disabled = true;
-            minutes.disabled = true;
-            seconds.disabled = true;
-            days.value = 0;
-            hours.value = 0;
-            minutes.value = 0;
-            seconds.value = 0;
-            days.classList.add('bg-gray-100');
-            hours.classList.add('bg-gray-100');
-            minutes.classList.add('bg-gray-100');
-            seconds.classList.add('bg-gray-100');
-        } else {
-            // Enable expiry inputs
-            days.disabled = false;
-            hours.disabled = false;
-            minutes.disabled = false;
-            seconds.disabled = false;
-            days.classList.remove('bg-gray-100');
-            hours.classList.remove('bg-gray-100');
-            minutes.classList.remove('bg-gray-100');
-            seconds.classList.remove('bg-gray-100');
-        }
-    }
-    
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize upload form
-        const neverExpireCheckbox = document.getElementById('never_expire');
-        if (neverExpireCheckbox) {
-            toggleExpiryInputs(neverExpireCheckbox);
-        }
-        
-        // Initialize all update forms
-        const updateCheckboxes = document.querySelectorAll('[id^="update_never_"]');
-        updateCheckboxes.forEach(function(checkbox) {
-            const fileId = checkbox.id.replace('update_never_', '');
-            toggleUpdateExpiryInputs(checkbox, fileId);
-        });
+    // Set shared users
+    const select = document.getElementById('edit_shared_users');
+    Array.from(select.options).forEach(option => {
+        option.selected = sharedUsers.includes(parseInt(option.value));
     });
+    
+    // Show/hide expiry fields
+    const fields = document.getElementById('expiry_fields_edit');
+    fields.style.display = neverExpire ? 'none' : 'grid';
+    
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditModal();
+    }
+});
 </script>
+
 {% endblock %}
