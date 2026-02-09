@@ -34,8 +34,8 @@
                 <div>
                     <label class="block font-medium mb-2">Share with Users (Optional)</label>
                     <select name="shared_users" multiple 
-                            class="w-full border border-gray-300 p-2 rounded h-32"
-                            style="height: auto;">
+                            class="w-full border border-gray-300 p-2 rounded h-40"
+                            style="height: 10rem;">
                         {% for user in all_users %}
                             <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
                         {% endfor %}
@@ -203,8 +203,8 @@
                 <label class="block font-medium mb-2">Share with Users</label>
                 <select name="shared_users" multiple 
                         id="edit_shared_users"
-                        class="w-full border border-gray-300 p-2 rounded h-32"
-                        style="height: auto;">
+                        class="w-full border border-gray-300 p-2 rounded h-40"
+                        style="height: 10rem;">
                     {% for user in all_users %}
                         <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
                     {% endfor %}
