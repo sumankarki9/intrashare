@@ -130,9 +130,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Redirect after login/logout
-LOGIN_REDIRECT_URL = 'dashboard'  # name of the URL to redirect after login
-LOGOUT_REDIRECT_URL = 'home'      # name of the URL to redirect after logout
-LOGIN_URL = 'login'                # optional: login page if user tries to access login_required pages
+LOGIN_REDIRECT_URL = 'dashboard'  
+LOGOUT_REDIRECT_URL = 'home'      
+LOGIN_URL = 'login'                
 
 
 # Media files

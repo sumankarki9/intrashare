@@ -52,7 +52,16 @@ class RegisterForm(UserCreationForm):
             # Stop further validation
             return cleaned_data
         
-        # 2️⃣ Validate email next
+        # # 2️⃣ Validate email next
+        # email = cleaned_data.get('email')
+        # if email:
+        #     try:
+        #         forms.EmailField().clean(email)
+        #     except forms.ValidationError:
+        #         self.add_error('email', "Enter a valid email address.")
+        #         return cleaned_data
+        
+# 2️⃣ Validate email next
         email = cleaned_data.get('email')
         if email:
             try:
@@ -60,10 +69,11 @@ class RegisterForm(UserCreationForm):
             except forms.ValidationError:
                 self.add_error('email', "Enter a valid email address.")
                 return cleaned_data
-        
-        # 3️⃣ Password validation is already handled by UserCreationForm
-        return cleaned_data
-
+            
+            # Check email uniqueness
+            if User.objects.filter(email=email).exists():
+                self.add_error('email', "An account with this email already exists.")
+                return cleaned_data
 
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
