@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from datetime import timedelta
 import random
 import string
@@ -148,6 +150,17 @@ class UserFile(models.Model):
             parts.append(f"{self.expiry_seconds}s")
         return " ".join(parts) if parts else "Not set"
     
+
+# -------------------------
+# Signal to delete file from disk when UserFile is deleted
+# -------------------------
+@receiver(post_delete, sender=UserFile)
+def delete_userfile_file(sender, instance, **kwargs):
+    """Delete file from /media/ when UserFile record is deleted"""
+    if instance.file:
+        # Delete the actual file from storage
+        instance.file.delete(save=False)
+
 
 class PasswordResetOTP(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
